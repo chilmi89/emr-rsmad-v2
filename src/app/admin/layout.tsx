@@ -13,6 +13,7 @@ import {
   X,
   ExternalLink,
   Sparkles,
+  Send,
 } from "lucide-react";
 
 export default function AdminLayout({
@@ -28,6 +29,7 @@ export default function AdminLayout({
   const navigation = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
     { name: "Akun Users", href: "/admin/users", icon: Users },
+    { name: "Kirim Email Simulasi", href: "/admin/send-email", icon: Send },
     { name: "Aktivitas Users", href: "/admin/activity", icon: Activity },
   ];
 

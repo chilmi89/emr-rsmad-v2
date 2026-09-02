@@ -18,6 +18,7 @@ import {
   EyeOff,
   AlertCircle,
   Sparkles,
+  Send,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -42,7 +43,13 @@ export default function AdminUsersPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showSendEmailModal, setShowSendEmailModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
+
+  // Send Email State
+  const [simulationUrl, setSimulationUrl] = useState("https://emr-rsmad-v2.vercel.app/auth-emr/login");
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+  const [emailStatus, setEmailStatus] = useState<{ id: string; success: boolean; message: string } | null>(null);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -205,6 +212,62 @@ export default function AdminUsersPage() {
       alert("Terjadi kesalahan koneksi");
     } finally {
       setFormLoading(false);
+    }
+  };
+
+  // Open Send Email Modal
+  const openSendEmailModal = (user: UserItem) => {
+    setSelectedUser(user);
+    setErrorMessage("");
+    setSuccessMessage("");
+    setShowSendEmailModal(true);
+  };
+
+  // Send Simulation Link Email
+  const handleSendSimulationEmail = async (user: UserItem) => {
+    setSendingEmailId(user.id);
+    setEmailStatus(null);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const res = await fetch("/api/admin/send-simulation-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: user.email,
+          username: user.username,
+          tokenGmail: user.tokenGmail,
+          simulationUrl: simulationUrl,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        setEmailStatus({
+          id: user.id,
+          success: true,
+          message: result.message || "Link simulasi berhasil dikirim ke Gmail target!",
+        });
+        setSuccessMessage(result.message || `Email berisi link simulasi berhasil terkirim ke ${user.email}`);
+      } else {
+        setEmailStatus({
+          id: user.id,
+          success: false,
+          message: result.message || "Gagal mengirim email simulasi",
+        });
+        setErrorMessage(result.message || "Gagal mengirim email simulasi");
+      }
+    } catch (err: any) {
+      setEmailStatus({
+        id: user.id,
+        success: false,
+        message: "Terjadi kesalahan jaringan",
+      });
+      setErrorMessage("Terjadi kesalahan jaringan");
+    } finally {
+      setSendingEmailId(null);
     }
   };
 
@@ -419,6 +482,14 @@ export default function AdminUsersPage() {
                     {/* Aksi */}
                     <td className="px-5 py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <Link
+                          href={`/admin/send-email`}
+                          className="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded border border-indigo-500/30 transition-all text-xs font-semibold flex items-center gap-1"
+                          title="Buka Halaman Kirim Email Simulasi"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Kirim Email</span>
+                        </Link>
                         <button
                           onClick={() => openEditModal(user)}
                           className="p-1.5 bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white rounded transition-colors"
@@ -692,6 +763,97 @@ export default function AdminUsersPage() {
               >
                 {formLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                 <span>Ya, Hapus Akun</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: KIRIM EMAIL SIMULASI LINK */}
+      {showSendEmailModal && selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Send className="w-5 h-5 text-indigo-400" />
+                Kirim Link Simulasi ke Gmail
+              </h3>
+              <button
+                onClick={() => setShowSendEmailModal(false)}
+                className="text-slate-400 hover:text-white text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {errorMessage && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 flex-shrink-0" />
+                <span>{successMessage}</span>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Penerima (Email Target)
+                </label>
+                <div className="p-2.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white font-mono flex items-center justify-between">
+                  <span>{selectedUser.email}</span>
+                  <span className="text-slate-400">({selectedUser.username})</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Tautan Link Simulasi (Akan Masuk di Email Gmail)
+                </label>
+                <input
+                  type="text"
+                  value={simulationUrl}
+                  onChange={(e) => setSimulationUrl(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Penerima akan menerima email resmi dari EDP RS berisi link ini.
+                </p>
+              </div>
+
+              {selectedUser.tokenGmail && (
+                <div className="p-2.5 bg-indigo-950/40 border border-indigo-800/40 rounded-lg text-[11px] text-indigo-300">
+                  💡 <strong>Token Terdeteksi:</strong> Link yang dikirimkan ke Gmail secara otomatis akan menyertakan parameter token: <br />
+                  <code className="text-white font-mono break-all">{simulationUrl}?token={selectedUser.tokenGmail}</code>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSendEmailModal(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition-colors"
+              >
+                Tutup
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSendSimulationEmail(selectedUser)}
+                disabled={sendingEmailId === selectedUser.id}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow transition-colors flex items-center gap-1.5"
+              >
+                {sendingEmailId === selectedUser.id ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Send className="w-3.5 h-3.5" />
+                )}
+                <span>Kirimkan Ke Gmail</span>
               </button>
             </div>
           </div>
