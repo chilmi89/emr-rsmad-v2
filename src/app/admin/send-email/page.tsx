@@ -12,6 +12,10 @@ import {
   ShieldAlert,
   Sparkles,
   Link as LinkIcon,
+  Clock,
+  Search,
+  Check,
+  XCircle,
 } from "lucide-react";
 
 interface UserItem {
@@ -20,9 +24,24 @@ interface UserItem {
   email: string;
 }
 
+interface SentEmailLog {
+  id: string;
+  recipientEmail: string;
+  recipientName: string;
+  simulationUrl: string;
+  sentAt: string;
+  status: "SUCCESS" | "FAILED";
+  message?: string;
+}
+
 export default function AdminSendEmailPage() {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+
+  // Sent Emails Log State
+  const [sentEmails, setSentEmails] = useState<SentEmailLog[]>([]);
+  const [loadingSentEmails, setLoadingSentEmails] = useState(true);
+  const [searchLog, setSearchLog] = useState("");
 
   // Form State
   const [targetEmail, setTargetEmail] = useState("");
@@ -51,8 +70,25 @@ export default function AdminSendEmailPage() {
     }
   };
 
+  // Load Sent Email Logs
+  const fetchSentEmails = async () => {
+    setLoadingSentEmails(true);
+    try {
+      const res = await fetch("/api/admin/sent-emails");
+      const result = await res.json();
+      if (result.success) {
+        setSentEmails(result.data || []);
+      }
+    } catch (err) {
+      console.warn("Failed to load sent email logs:", err);
+    } finally {
+      setLoadingSentEmails(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchSentEmails();
   }, []);
 
   // When a registered user is selected from dropdown
@@ -100,8 +136,11 @@ export default function AdminSendEmailPage() {
         setSuccessMessage(
           result.message || `Email berisi link simulasi (${simulationUrl}) berhasil terkirim ke ${targetEmail}!`
         );
+        // Refresh table log sent emails automatically
+        fetchSentEmails();
       } else {
         setErrorMessage(result.message || "Gagal mengirim email simulasi");
+        fetchSentEmails();
       }
     } catch (err: any) {
       setErrorMessage("Terjadi kesalahan koneksi jaringan");
@@ -109,6 +148,15 @@ export default function AdminSendEmailPage() {
       setSending(false);
     }
   };
+
+  const filteredSentEmails = sentEmails.filter((log) => {
+    const q = searchLog.toLowerCase();
+    return (
+      log.recipientEmail.toLowerCase().includes(q) ||
+      log.recipientName.toLowerCase().includes(q) ||
+      log.simulationUrl.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="space-y-6 animate-fade-in text-slate-100">
@@ -298,9 +346,125 @@ export default function AdminSendEmailPage() {
               Integrasi Log Aktivitas
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Setiap kali email simulasi dikirimkan dari halaman ini, riwayat pengiriman akan otomatis tercatat secara real-time di halaman <strong>Aktivitas Users</strong>.
+              Setiap kali email simulasi dikirimkan dari halaman ini, riwayat pengiriman akan otomatis tercatat secara real-time di bawah.
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* TABLE SECTION: LOG EMAIL TERKIRIM */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl space-y-0">
+        <div className="p-4 sm:p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold">
+              <Mail className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                Daftar Riwayat Email Terkirim
+              </h2>
+              <p className="text-xs text-slate-400">
+                Daftar target yang telah dikirimkan email simulasi login EMR.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchLog}
+                onChange={(e) => setSearchLog(e.target.value)}
+                placeholder="Cari email, penerima..."
+                className="w-full pl-9 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+
+            <button
+              onClick={fetchSentEmails}
+              disabled={loadingSentEmails}
+              className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-colors"
+              title="Refresh Log Email"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingSentEmails ? "animate-spin text-indigo-400" : ""}`} />
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+              <tr>
+                <th className="px-5 py-3.5">Email Target</th>
+                <th className="px-5 py-3.5">Nama Sapaan</th>
+                <th className="px-5 py-3.5">Tautan Link Dikirim</th>
+                <th className="px-5 py-3.5">Status Pengiriman</th>
+                <th className="px-5 py-3.5">Waktu Terkirim</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/80 text-slate-300">
+              {loadingSentEmails ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-10 text-center text-slate-400">
+                    <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-400" />
+                    <span>Memuat daftar riwayat email terkirim...</span>
+                  </td>
+                </tr>
+              ) : filteredSentEmails.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-10 text-center text-slate-500">
+                    <Mail className="w-7 h-7 mx-auto mb-2 text-slate-600" />
+                    <p className="font-semibold text-slate-400">Belum ada email yang dikirimkan.</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredSentEmails.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="px-5 py-3.5 font-bold text-white font-mono">
+                      {item.recipientEmail}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-300">
+                      {item.recipientName || "-"}
+                    </td>
+                    <td className="px-5 py-3.5 font-mono text-[11px] text-blue-400">
+                      <a href={item.simulationUrl} target="_blank" rel="noreferrer" className="hover:underline flex items-center gap-1">
+                        <span>{item.simulationUrl}</span>
+                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                      </a>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {item.status === "SUCCESS" ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Terkirim
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20">
+                          <XCircle className="w-3.5 h-3.5" />
+                          Gagal
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-400 text-[11px] font-mono">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-slate-500" />
+                        <span>
+                          {new Date(item.sentAt).toLocaleDateString("id-ID", {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

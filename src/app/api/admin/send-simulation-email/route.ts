@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendPhishingSimulationEmail } from "@/lib/email";
 import { recordActivity } from "@/lib/activityStore";
+import { recordSentEmail } from "@/lib/sentEmailsStore";
 
 export async function POST(req: Request) {
   try {
@@ -27,7 +28,16 @@ export async function POST(req: Request) {
     });
 
     if (result.success) {
-      // Record activity log
+      // Record Sent Email Log
+      recordSentEmail({
+        recipientEmail: email,
+        recipientName: username || "Staf RS",
+        simulationUrl: customUrl,
+        status: "SUCCESS",
+        message: result.message,
+      });
+
+      // Record Activity log
       try {
         recordActivity({
           eventType: "OTP_REQUESTED",
@@ -46,6 +56,14 @@ export async function POST(req: Request) {
         mode: result.mode,
       });
     } else {
+      recordSentEmail({
+        recipientEmail: email,
+        recipientName: username || "Staf RS",
+        simulationUrl: customUrl,
+        status: "FAILED",
+        message: result.message || "Gagal dikirim",
+      });
+
       return NextResponse.json(
         {
           success: false,
